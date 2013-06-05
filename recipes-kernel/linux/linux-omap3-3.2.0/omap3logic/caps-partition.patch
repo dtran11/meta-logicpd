@@ -1,0 +1,15 @@
+diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-omap3logic.c
+--- a/arch/arm/mach-omap2/board-omap3logic.c
++++ b/arch/arm/mach-omap2/board-omap3logic.c
+@@ -188,6 +188,11 @@ static struct mtd_partition overo_nand_partitions[] = {
+ 	{
+ 		.name           = "rootfs",
+ 		.offset         = MTDPART_OFS_APPEND,	/* Offset = 0x680000 */
++		.size           = 800 * NAND_BLOCK_SIZE,
++	},
++	{
++		.name		= "caps",
++		.offset		= MTDPART_OFS_APPEND,		
+ 		.size           = MTDPART_SIZ_FULL,
+ 	},
+ };
