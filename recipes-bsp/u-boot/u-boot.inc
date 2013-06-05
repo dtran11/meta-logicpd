@@ -2,7 +2,7 @@ DESCRIPTION = "U-Boot - the Universal Boot Loader"
 HOMEPAGE = "http://www.denx.de/wiki/U-Boot/WebHome"
 SECTION = "bootloaders"
 PRIORITY = "optional"
-LICENSE = "GPLv2"
+LICENSE = "GPLv2+"
 LIC_FILES_CHKSUM = "file://COPYING;md5=1707d6db1d42237583f50183a5651ecb"
 
 PROVIDES = "virtual/bootloader"
@@ -15,14 +15,9 @@ PARALLEL_MAKE=""
 EXTRA_OEMAKE = "CROSS_COMPILE=${TARGET_PREFIX}"
 
 UBOOT_MACHINE ?= "${MACHINE}_config"
-UBOOT_SPL ?= "MLO"
-UBOOT_SPL_TARGET ?= "MLO-${MACHINE}-${PV}-${PR}"
-UBOOT_BINARY ?= "u-boot.bin"
-UBOOT_BIN_TARGET ?= "u-boot-${MACHINE}-${PV}-${PR}.bin"
-UBOOT_IMAGE ?= "u-boot.img"
-UBOOT_IMG_TARGET = "u-boot-${MACHINE}-${PV}-${PR}.img"
-UBOOT_BIN_SYMLINK ?= "u-boot-${MACHINE}.bin"
-UBOOT_IMG_SYMLINK ?= "u-boot-${MACHINE}.img"
+UBOOT_BINARY ?= "u-boot.img"
+UBOOT_IMAGE ?= "u-boot-${MACHINE}-${PV}-${PR}.img"
+UBOOT_SYMLINK ?= "u-boot-${MACHINE}.img"
 UBOOT_MAKE_TARGET ?= "all"
 
 do_configure () {
@@ -34,12 +29,22 @@ do_compile () {
 	unset CFLAGS
 	unset CPPFLAGS
 	oe_runmake ${UBOOT_MAKE_TARGET}
+	oe_runmake tools env HOSTCC="${CC}" HOSTSTRIP="${STRIP}"
 }
 
 do_install () {
 	install -d ${D}/boot
-	install ${S}/${UBOOT_BINARY} ${D}/boot/${UBOOT_BIN_TARGET}
-	ln -sf ${UBOOT_BIN_TARGET} ${D}/boot/${UBOOT_BINARY}
+	install ${S}/${UBOOT_BINARY} ${D}/boot/${UBOOT_IMAGE}
+	ln -sf ${UBOOT_IMAGE} ${D}/boot/${UBOOT_BINARY}
+
+	if [ -e ${WORKDIR}/fw_env.config ] ; then
+	    install -d ${D}${base_sbindir}
+		install -d ${D}${sysconfdir}
+		install -m 644 ${WORKDIR}/fw_env.config ${D}${sysconfdir}/fw_env.config
+		install -m 755 ${S}/tools/env/fw_printenv ${D}${base_sbindir}/fw_printenv
+		install -m 755 ${S}/tools/env/fw_printenv ${D}${base_sbindir}/fw_setenv
+	fi
+
 }
 
 FILES_${PN} = "/boot"
@@ -51,21 +56,23 @@ FILES_${PN}-fw-utils = "${sysconfdir} ${base_sbindir}"
 # u-boot doesn't use LDFLAGS for fw files, needs to get fixed, but until then:
 INSANE_SKIP_${PN}-fw-utils = "True"
 
+inherit deploy
+
+addtask deploy before do_package after do_compile
+
 do_deploy () {
 	install -d ${DEPLOY_DIR_IMAGE}
-	install ${S}/${UBOOT_BINARY} ${DEPLOY_DIR_IMAGE}/${UBOOT_BIN_TARGET}
-	package_stagefile_shell ${DEPLOY_DIR_IMAGE}/${UBOOT_BIN_TARGET}
+	install ${S}/${UBOOT_BINARY} ${DEPLOY_DIR_IMAGE}/${UBOOT_IMAGE}
 
-	install ${S}/${UBOOT_SPL} ${DEPLOY_DIR_IMAGE}/${UBOOT_SPL_TARGET}
-	install ${S}/${UBOOT_IMAGE} ${DEPLOY_DIR_IMAGE}/${UBOOT_IMG_TARGET}
-	
 	cd ${DEPLOY_DIR_IMAGE}
-	rm -f ${UBOOT_BIN_SYMLINK}
-	rm -f ${UBOOT_IMG_SYMLINK}
-	ln -sf ${UBOOT_BIN_TARGET} ${UBOOT_BIN_SYMLINK}
-	ln -sf ${UBOOT_IMG_TARGET} ${UBOOT_IMG_SYMLINK}
-	package_stagefile_shell ${DEPLOY_DIR_IMAGE}/${UBOOT_BIN_SYMLINK}
-}
-do_deploy[dirs] = "${S}"
-addtask deploy before do_package_stage after do_compile
+	rm -f ${UBOOT_SYMLINK}
+	ln -sf ${UBOOT_IMAGE} ${UBOOT_SYMLINK}
+	ln -sf ${UBOOT_IMAGE} ${UBOOT_BINARY}
 
+	if [ -e ${S}/MLO ] ; then
+		install ${S}/MLO ${DEPLOY_DIR_IMAGE}/MLO-${MACHINE}-${PV}
+		rm -f ${DEPLOY_DIR_IMAGE}/MLO-${MACHINE} ${DEPLOY_DIR_IMAGE}/MLO
+		ln -sf MLO-${MACHINE}-${PV} ${DEPLOY_DIR_IMAGE}/MLO-${MACHINE}
+		ln -sf MLO-${MACHINE}-${PV} ${DEPLOY_DIR_IMAGE}/MLO
+	fi
+}
