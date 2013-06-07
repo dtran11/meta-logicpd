@@ -1,8 +1,35 @@
 diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-omap3logic.c
 --- a/arch/arm/mach-omap2/board-omap3logic.c
 +++ b/arch/arm/mach-omap2/board-omap3logic.c
-@@ -14,37 +14,53 @@
-  * published by the Free Software Foundation.
+@@ -1,49 +1,68 @@
+ /*
+- * linux/arch/arm/mach-omap2/board-omap3logic.c
++ * board-omap3logic.c (LogicPD Torpedo)
+  *
+- * Copyright (C) 2010 Li-Pro.Net
+- * Stephan Linz <linz@li-pro.net>
++ * Initial code: Steve Sakoman <steve@sakoman.com>
+  *
+- * Copyright (C) 2010 Logic Product Development, Inc.
+- * Peter Barada <peter.barada@logicpd.com>
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License
++ * version 2 as published by the Free Software Foundation.
+  *
+- * Modified from Beagle, EVM, and RX51
++ * This program is distributed in the hope that it will be useful, but
++ * WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++ * General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
++ * 02110-1301 USA
+  *
+- * This program is free software; you can redistribute it and/or modify
+- * it under the terms of the GNU General Public License version 2 as
+- * published by the Free Software Foundation.
   */
  
 -#include <linux/kernel.h>
@@ -61,14 +88,12 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 -#include <plat/common.h>
 -#include <plat/gpmc-smsc911x.h>
 -#include <plat/gpmc.h>
-+#include "control.h"
- #include <plat/sdrc.h>
- 
+-#include <plat/sdrc.h>
 +
+ 
  #define OMAP3LOGIC_SMSC911X_CS			1
  
- #define OMAP3530_LV_SOM_MMC_GPIO_CD		110
-@@ -54,51 +70,128 @@
+@@ -54,51 +73,71 @@
  #define OMAP3_TORPEDO_MMC_GPIO_CD		127
  #define OMAP3_TORPEDO_SMSC911X_GPIO_IRQ		129
  
@@ -90,31 +115,8 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 -	},
 -	.num_consumer_supplies  = ARRAY_SIZE(omap3logic_vmmc1_supply),
 -	.consumer_supplies      = omap3logic_vmmc1_supply,
-+#define OVERO_GPIO_BT_XGATE	15
-+#define OVERO_GPIO_W2W_NRESET	16
-+#define OVERO_GPIO_PENDOWN	114
-+#define OVERO_GPIO_BT_NRESET	164
-+#define OVERO_GPIO_USBH_CPEN	168
-+#define OVERO_GPIO_USBH_NRESET	183
-+
-+#define OVERO_SMSC911X_CS      5
-+#define OVERO_SMSC911X_GPIO    176
-+#define OVERO_SMSC911X2_CS     4
-+#define OVERO_SMSC911X2_GPIO   65
-+
-+#define	CONFIG_CAPS2515_MODULE
-+#define CONFIG_CAPS5307_MODULE
-+
-+#if defined(CONFIG_CAPS2515_MODULE)
-+
-+#define OVERO_GPIO_CAN0_INT  114
-+#define OVERO_GPIO_SPI1_CS0 174
-+
-+static struct omap2_mcspi_device_config omap3logic_caps2515_mcspi_config = {
-+	.turbo_mode	= 0,
-+	.single_channel	= 1,	/* 0: slave, 1: master */
- };
- 
+-};
+-
 -static struct twl4030_gpio_platform_data omap3logic_gpio_data = {
 -	.gpio_base	= OMAP_MAX_GPIO_LINES,
 -	.irq_base	= TWL4030_GPIO_IRQ_BASE,
@@ -123,49 +125,18 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 -	.pullups	= BIT(1),
 -	.pulldowns	= BIT(2)  | BIT(6)  | BIT(7)  | BIT(8)
 -			| BIT(13) | BIT(15) | BIT(16) | BIT(17),
-+static void __init omap3logic_caps2515_init(void)
-+{
-+    /* printk(KERN_INFO "omap3logic_caps2515_init(): requesting interrupt\n"); */
-+    if ((gpio_request(OVERO_GPIO_CAN0_INT, "MCP251X_0_INTERRUPT") == 0) &&
-+           (gpio_direction_input(OVERO_GPIO_CAN0_INT) == 0)) {
-+        gpio_export(OVERO_GPIO_CAN0_INT, 0);
-+    } else {
-+        printk(KERN_ERR "omap3logic_caps2515_init(): could not obtain gpio for MCP251X_INTERRUPT\n");
-+        return;
-+    }
-+}
-+
-+#else
-+static inline void __init omap3logic_caps2515_init(void) { return; }
-+#endif
-+
-+#if defined(CONFIG_CAPS5307_MODULE)
-+
-+static struct omap2_mcspi_device_config omap3logic_caps5307_mcspi_config = {
-+	.turbo_mode	= 0,
-+	.single_channel	= 1,	/* 0: slave, 1: master */
- };
+-};
++#if defined(CONFIG_SMSC911X) || defined(CONFIG_SMSC911X_MODULE)
  
 -static struct twl4030_platform_data omap3logic_twldata = {
 -	.irq_base	= TWL4030_IRQ_BASE,
 -	.irq_end	= TWL4030_IRQ_END,
-+static void __init omap3logic_caps5307_init(void)
-+{
-+	return;
-+}
++#include <linux/smsc911x.h>
++#include <plat/gpmc-smsc911x.h>
  
 -	/* platform_data for children goes here */
 -	.gpio		= &omap3logic_gpio_data,
 -	.vmmc1		= &omap3logic_vmmc1,
-+#else
-+static inline void __init omap3logic_caps5307_init(void) { return; }
-+#endif
-+
-+#if defined(CONFIG_SMSC911X) || defined(CONFIG_SMSC911X_MODULE)
-+
-+#include <linux/smsc911x.h>
-+#include <plat/gpmc-smsc911x.h>
-+
 +static struct omap_smsc911x_platform_data __initdata board_smsc911x_data = {
 +	.cs             = OMAP3LOGIC_SMSC911X_CS,
 +	.gpio_irq       = -EINVAL,
@@ -199,7 +170,7 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +static inline void __init omap3logic_init_smsc911x(void) { return; }
 +#endif
 +
-+static struct mtd_partition overo_nand_partitions[] = {
++static struct mtd_partition omap_nand_partitions[] = {
 +	{
 +		.name           = "xloader",
 +		.offset         = 0,			/* Offset = 0x00000 */
@@ -231,7 +202,18 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  static struct omap2_hsmmc_info __initdata board_mmc_info[] = {
  	{
  		.name		= "external",
-@@ -110,6 +203,10 @@ static struct omap2_hsmmc_info __initdata board_mmc_info[] = {
+@@ -107,9 +146,21 @@ static struct omap2_hsmmc_info __initdata board_mmc_info[] = {
+ 		.gpio_cd	= -EINVAL,
+ 		.gpio_wp	= -EINVAL,
+ 	},
++	{
++		.name		= "wl1271",
++		.mmc		= 3,
++		.caps		= MMC_CAP_4_BIT_DATA | MMC_CAP_POWER_OFF_CARD,
++		.gpio_cd	= -EINVAL,
++		.gpio_wp	= -EINVAL,
++		.nonremovable	= true,
++	},
  	{}      /* Terminator */
  };
  
@@ -242,7 +224,7 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  static void __init board_mmc_init(void)
  {
  	if (machine_is_omap3530_lv_som()) {
-@@ -131,55 +228,110 @@ static void __init board_mmc_init(void)
+@@ -131,73 +182,153 @@ static void __init board_mmc_init(void)
  	omap2_hsmmc_init(board_mmc_info);
  }
  
@@ -274,8 +256,12 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +	},
 +	.num_consumer_supplies  = ARRAY_SIZE(omap3logic_vmmc1_supply),
 +	.consumer_supplies      = omap3logic_vmmc1_supply,
-+};
-+
+ };
+ 
+-/* TODO/FIXME (comment by Peter Barada, LogicPD):
+- * Fix the PBIAS voltage for Torpedo MMC1 pins that
+- * are used for other needs (IRQs, etc).            */
+-static void omap3torpedo_fix_pbias_voltage(void)
 +static struct twl4030_platform_data omap3logic_twldata = {
 +	.irq_base	= TWL4030_IRQ_BASE,
 +	.irq_end	= TWL4030_IRQ_END,
@@ -283,12 +269,8 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +	/* platform_data for children goes here */
 +	.gpio		= &omap3logic_gpio_data,
 +	.vmmc1		= &omap3logic_vmmc1,
- };
- 
--/* TODO/FIXME (comment by Peter Barada, LogicPD):
-- * Fix the PBIAS voltage for Torpedo MMC1 pins that
-- * are used for other needs (IRQs, etc).            */
--static void omap3torpedo_fix_pbias_voltage(void)
++};
++
 +static int __init omap3logic_i2c_init(void)
  {
 -	u16 control_pbias_offset = OMAP343X_CONTROL_PBIAS_LITE;
@@ -337,7 +319,14 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  }
  
 -static inline void __init board_smsc911x_init(void)
--{
++#ifdef CONFIG_OMAP_MUX
++static struct omap_board_mux board_mux[] __initdata = {
++	{ .reg_offset = OMAP_MUX_TERMINATOR },
++};
++#endif
++
++static void __init omap3logic_opp_init(void)
+ {
 -	if (machine_is_omap3530_lv_som()) {
 -		/* OMAP3530 LV SOM board */
 -		board_smsc911x_data.gpio_irq =
@@ -350,65 +339,57 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 -	} else {
 -		/* unsupported board */
 -		printk(KERN_ERR "%s(): unknown machine type\n", __func__);
--		return;
--	}
-+static struct spi_board_info omap3logic_spi_board_info[] __initdata = {
-+#if defined(CONFIG_CAPS2515_MODULE)
-+	#warning CAPS2515 DEFINED FOR SPI1 CS0
-+	{
-+		.modalias        	= "caps2515",
-+		.bus_num         	= 1,
-+		.chip_select     	= 0,
-+		.max_speed_hz    	= 10000000,
-+		.controller_data 	= &omap3logic_caps2515_mcspi_config,
-+		.irq             	= OMAP_GPIO_IRQ(OVERO_GPIO_CAN0_INT),
-+		.platform_data   	= NULL,
-+	},
- 
--	gpmc_smsc911x_init(&board_smsc911x_data);
-+#endif
-+#if defined(CONFIG_CAPS5307_MODULE)
-+	#warning CAPS5307 DEFINED FOR SPI1 CS1
-+    {
-+		.modalias        	= "caps5307",
-+		.bus_num         	= 1,
-+		.chip_select     	= 1,
-+		.max_speed_hz    	= 15000000,
-+		.controller_data 	= &omap3logic_caps5307_mcspi_config,
-+		.irq             	= NULL,
-+		.platform_data   	= NULL,
-+	},
-+
-+#endif
-+};
-+
-+static int __init omap3logic_spi_init(void)
-+{	
-+	omap3logic_caps2515_init();
-+	omap3logic_caps5307_init();
-+	spi_register_board_info(omap3logic_spi_board_info,
-+			ARRAY_SIZE(omap3logic_spi_board_info));
-+	return 0;
- }
- 
- #ifdef CONFIG_OMAP_MUX
-@@ -188,16 +340,45 @@ static struct omap_board_mux board_mux[] __initdata = {
- };
- #endif
- 
-+static void __init omap3logic_opp_init(void)
-+{
 +	int r = 0;
 +
 +	/* Initialize the omap3 opp table */
 +	if (omap3_opp_init()) {
 +		pr_err("%s: opp default init failed\n", __func__);
-+		return;
-+	}
-+	
-+	return;
-+}
+ 		return;
+ 	}
+ 
+-	gpmc_smsc911x_init(&board_smsc911x_data);
++	/* Custom OPP enabled for 36/3730 */
++	if (cpu_is_omap3630()) {
++		struct device *mpu_dev, *iva_dev;
 +
++		mpu_dev = omap_device_get_by_hwmod_name("mpu");
++
++		if (omap3_has_iva())
++			iva_dev = omap_device_get_by_hwmod_name("iva");
++
++		if (!mpu_dev) {
++			pr_err("%s: Aiee.. no mpu device? %p\n",
++				__func__, mpu_dev);
++			return;
++		}
++		/* Enable MPU 1GHz and lower opps */
++		r = opp_enable(mpu_dev, 800000000);
++		r |= opp_enable(mpu_dev, 1000000000);
++
++		if (omap3_has_iva()) {
++			/* Enable IVA 800MHz and lower opps */
++			r |= opp_enable(iva_dev, 660000000);
++			r |= opp_enable(iva_dev, 800000000);
++		}
++
++		if (r) {
++			pr_err("%s: failed to enable higher opp %d\n",
++				__func__, r);
++			opp_disable(mpu_dev, 800000000);
++			opp_disable(mpu_dev, 1000000000);
++			if (omap3_has_iva()) {
++				opp_disable(iva_dev, 660000000);
++				opp_disable(iva_dev, 800000000);
++			}
++		}
++	}
++	return;
+ }
+ 
+-#ifdef CONFIG_OMAP_MUX
+-static struct omap_board_mux board_mux[] __initdata = {
+-	{ .reg_offset = OMAP_MUX_TERMINATOR },
+-};
 +#if defined(CONFIG_USB_MUSB_HDRC) || \
 +	defined (CONFIG_USB_MUSB_HDRC_MODULE)
 +static inline void __init omap3logic_init_musb(void)
@@ -417,8 +398,8 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +}
 +#else
 +static inline void __init omap3logic_init_musb(void) { return; }
-+#endif
-+
+ #endif
+ 
  static void __init omap3logic_init(void)
  {
 -	omap3_mux_init(board_mux, OMAP_PACKAGE_CBB);
@@ -429,20 +410,19 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  	omap3logic_i2c_init();
  	omap_serial_init();
  	omap_sdrc_init(NULL, NULL);
-+	omap_nand_flash_init(0, overo_nand_partitions,
-+			     ARRAY_SIZE(overo_nand_partitions));
++	omap_nand_flash_init(0, omap_nand_partitions,
++			     ARRAY_SIZE(omap_nand_partitions));
  	board_mmc_init();
 -	board_smsc911x_init();
 -
-+	omap3logic_init_musb();
-+	omap3logic_spi_init();
++	omap3logic_init_musb();	
 +	omap3logic_init_smsc911x();
 +	omap3logic_opp_init();
 +	
  	/* Ensure SDRC pins are mux'd for self-refresh */
  	omap_mux_init_signal("sdrc_cke0", OMAP_PIN_OUTPUT);
  	omap_mux_init_signal("sdrc_cke1", OMAP_PIN_OUTPUT);
-@@ -205,6 +386,7 @@ static void __init omap3logic_init(void)
+@@ -205,6 +336,7 @@ static void __init omap3logic_init(void)
  
  MACHINE_START(OMAP3_TORPEDO, "Logic OMAP3 Torpedo board")
  	.atag_offset	= 0x100,
@@ -450,10 +430,30 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  	.map_io		= omap3_map_io,
  	.init_early	= omap35xx_init_early,
  	.init_irq	= omap3_init_irq,
-@@ -214,6 +396,7 @@ MACHINE_END
+@@ -214,6 +346,27 @@ MACHINE_END
  
  MACHINE_START(OMAP3530_LV_SOM, "OMAP Logic 3530 LV SOM board")
  	.atag_offset	= 0x100,
++	.reserve	= omap_reserve,
++	.map_io		= omap3_map_io,
++	.init_early	= omap35xx_init_early,
++	.init_irq	= omap3_init_irq,
++	.init_machine	= omap3logic_init,
++	.timer		= &omap3_timer,
++MACHINE_END
++
++MACHINE_START(DM3730_SOM_LV, "Logic DM37x SOM LV board")
++	.atag_offset	= 0x100,
++	.reserve	= omap_reserve,
++	.map_io		= omap3_map_io,
++	.init_early	= omap35xx_init_early,
++	.init_irq	= omap3_init_irq,
++	.init_machine	= omap3logic_init,
++	.timer		= &omap3_timer,
++MACHINE_END
++
++MACHINE_START(DM3730_TORPEDO, "Logic DM37x Torpedo board")
++	.atag_offset	= 0x100,
 +	.reserve	= omap_reserve,
  	.map_io		= omap3_map_io,
  	.init_early	= omap35xx_init_early,
