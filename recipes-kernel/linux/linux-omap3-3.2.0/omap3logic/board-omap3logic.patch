@@ -197,7 +197,7 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +	} else if (machine_is_omap3_torpedo() || machine_is_dm3730_torpedo()) {
 +		/* OMAP35x/DM37x Torpedo board */
 +		board_mmc_info[0].gpio_cd = OMAP3_TORPEDO_MMC_GPIO_CD;
-+		omap_mux_init_signal("gpio_127", OMAP_PIN_OUTPUT);
++		omap_mux_init_signal("gpio_127", OMAP_PIN_INPUT);
 +	} else {
 +		/* unsupported board */
 +		printk(KERN_ERR "%s(): unknown machine type\n", __func__);
