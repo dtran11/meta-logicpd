@@ -13,6 +13,7 @@ SRC_URI = "git://www.sakoman.com/git/linux.git;branch=omap-3.2;protocol=git \
 	   file://defconfig \ 
 	   file://board-omap3logic.patch;apply=yes \
 	   file://Makefile.patch;apply=yes \
+	   file://Kconfig.patch;apply=yes \
            "
 
 do_configure_prepend() {
