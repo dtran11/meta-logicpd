@@ -167,7 +167,7 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  static struct regulator_consumer_supply omap3logic_vmmc1_supply[] = {
  	REGULATOR_SUPPLY("vmmc", "omap_hsmmc.0"),
  };
-@@ -74,11 +160,176 @@ static struct regulator_init_data omap3logic_vmmc1 = {
+@@ -74,137 +160,332 @@ static struct regulator_init_data omap3logic_vmmc1 = {
  	.consumer_supplies      = omap3logic_vmmc1_supply,
  };
  
@@ -344,11 +344,27 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  	.pullups	= BIT(1),
  	.pulldowns	= BIT(2)  | BIT(6)  | BIT(7)  | BIT(8)
  			| BIT(13) | BIT(15) | BIT(16) | BIT(17),
-@@ -95,116 +346,135 @@ static struct twl4030_platform_data omap3logic_twldata = {
+ };
  
++static struct twl4030_clock_init_data omap3logic_twl_clock_data = {
++	.ck32k_lowpwr_enable = 1,
++};
++
+ static struct twl4030_platform_data omap3logic_twldata = {
+ 	.irq_base	= TWL4030_IRQ_BASE,
+ 	.irq_end	= TWL4030_IRQ_END,
++	.clock		= &omap3logic_twl_clock_data,
+ 
+ 	/* platform_data for children goes here */
+ 	.gpio		= &omap3logic_gpio_data,
+ 	.vmmc1		= &omap3logic_vmmc1,
+ };
+ 
++static struct i2c_board_info __initdata omap3logic_i2c3_boardinfo[] = {
++};
++
  static int __init omap3logic_i2c_init(void)
  {
--	omap3_pmic_init("twl4030", &omap3logic_twldata);
 +	u32 pdata_flags = 0;
 +	u32 regulators_flags = TWL_COMMON_REGULATOR_VPLL2;
 +
@@ -374,9 +390,12 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +
 +	omap3logic_twldata.vpll2->constraints.name = "VDVI";
 +
-+	omap3_pmic_init("tps65950", &omap3logic_twldata);
-+	/* i2c2 pins are used for gpio */
-+	omap_register_i2c_bus(3, 400, NULL, 0);
+ 	omap3_pmic_init("twl4030", &omap3logic_twldata);
++
++	omap_register_i2c_bus(2, 400, NULL, 0);
++	omap_register_i2c_bus(3, 400, omap3logic_i2c3_boardinfo,
++			ARRAY_SIZE(omap3logic_i2c3_boardinfo));
++
  	return 0;
  }
  
@@ -431,7 +450,8 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 -	.gpio_irq       = -EINVAL,
 -	.gpio_reset     = -EINVAL,
 -};
--
++		mpu_dev = omap_device_get_by_hwmod_name("mpu");
+ 
 -/* TODO/FIXME (comment by Peter Barada, LogicPD):
 - * Fix the PBIAS voltage for Torpedo MMC1 pins that
 - * are used for other needs (IRQs, etc).            */
@@ -439,17 +459,13 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 -{
 -	u16 control_pbias_offset = OMAP343X_CONTROL_PBIAS_LITE;
 -	u32 reg;
-+		mpu_dev = omap_device_get_by_hwmod_name("mpu");
++		if (omap3_has_iva())
++			iva_dev = omap_device_get_by_hwmod_name("iva");
  
 -	if (machine_is_omap3_torpedo())
 -	{
 -		/* Set the bias for the pin */
 -		reg = omap_ctrl_readl(control_pbias_offset);
-+		if (omap3_has_iva())
-+			iva_dev = omap_device_get_by_hwmod_name("iva");
- 
--		reg &= ~OMAP343X_PBIASLITEPWRDNZ1;
--		omap_ctrl_writel(reg, control_pbias_offset);
 +		if (!mpu_dev) {
 +			pr_err("%s: Aiee.. no mpu device? %p\n",
 +				__func__, mpu_dev);
@@ -459,14 +475,17 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +		r = opp_enable(mpu_dev, 800000000);
 +		r |= opp_enable(mpu_dev, 1000000000);
  
--		/* 100ms delay required for PBIAS configuration */
--		msleep(100);
+-		reg &= ~OMAP343X_PBIASLITEPWRDNZ1;
+-		omap_ctrl_writel(reg, control_pbias_offset);
 +		if (omap3_has_iva()) {
 +			/* Enable IVA 800MHz and lower opps */
 +			r |= opp_enable(iva_dev, 660000000);
 +			r |= opp_enable(iva_dev, 800000000);
 +		}
  
+-		/* 100ms delay required for PBIAS configuration */
+-		msleep(100);
+-
 -		reg |= OMAP343X_PBIASLITEVMODE1;
 -		reg |= OMAP343X_PBIASLITEPWRDNZ1;
 -		omap_ctrl_writel(reg | 0x300, control_pbias_offset);
@@ -557,7 +576,7 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  	.map_io		= omap3_map_io,
  	.init_early	= omap35xx_init_early,
  	.init_irq	= omap3_init_irq,
-@@ -214,6 +484,27 @@ MACHINE_END
+@@ -214,6 +495,27 @@ MACHINE_END
  
  MACHINE_START(OMAP3530_LV_SOM, "OMAP Logic 3530 LV SOM board")
  	.atag_offset	= 0x100,
