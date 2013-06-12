@@ -186,10 +186,10 @@ diff --git a/board/logicpd/omap3som/omap3logic.h b/board/logicpd/omap3som/omap3l
 +	MUX_VAL(CP(ETK_D1_ES2),		(IEN  | PTD | EN  | M4)) /*GPIO_15 - X_GATE*/\
 +	MUX_VAL(CP(ETK_D2_ES2),		(IEN  | PTU | EN  | M4)) /*GPIO_16*/\
 +								 /* - W2W_NRESET*/\
-+	MUX_VAL(CP(ETK_D3_ES2),		(IEN  | PTU | EN  | M2)) /*MMC3_DAT3*/\
-+	MUX_VAL(CP(ETK_D4_ES2),		(IEN  | PTU | EN  | M2)) /*MMC3_DAT0*/\
-+	MUX_VAL(CP(ETK_D5_ES2),		(IEN  | PTU | EN  | M2)) /*MMC3_DAT1*/\
-+	MUX_VAL(CP(ETK_D6_ES2),		(IEN  | PTU | EN  | M2)) /*MMC3_DAT2*/\
++	MUX_VAL(CP(ETK_D3_ES2),		(IEN  | PTU | EN  | M4)) /*GPIO_17*/\
++	MUX_VAL(CP(ETK_D4_ES2),		(IEN  | PTU | EN  | M4)) /*GPIO_18*/\
++	MUX_VAL(CP(ETK_D5_ES2),		(IEN  | PTU | EN  | M4)) /*GPIO_19*/\
++	MUX_VAL(CP(ETK_D6_ES2),		(IEN  | PTU | EN  | M4)) /*GPIO_20*/\
 +	MUX_VAL(CP(ETK_D7_ES2),		(IEN  | PTU | EN  | M4)) /*GPIO_21*/\
 +	MUX_VAL(CP(ETK_D8_ES2),		(IEN  | PTU | EN  | M4)) /*GPIO_22*/\
 +	MUX_VAL(CP(ETK_D9_ES2),		(IEN  | PTU | EN  | M4)) /*GPIO_23*/\
