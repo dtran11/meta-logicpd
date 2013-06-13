@@ -1,0 +1,51 @@
+diff --git a/drivers/net/wireless/wl12xx/wl12xx.h b/drivers/net/wireless/wl12xx/wl12xx.h
+--- a/drivers/net/wireless/wl12xx/wl12xx.h
++++ b/drivers/net/wireless/wl12xx/wl12xx.h
+@@ -120,7 +120,8 @@ extern u32 wl12xx_debug_level;
+  * ini parameters between them are different.  The driver validates
+  * the correct NVS size in wl1271_boot_upload_nvs().
+  */
+-#define WL12XX_NVS_NAME "ti-connectivity/wl1271-nvs.bin"
++#define WL127X_NVS_NAME "ti-connectivity/wl127x-nvs.bin"
++#define WL128X_NVS_NAME "ti-connectivity/wl128x-nvs.bin"
+ 
+ #define WL1271_TX_SECURITY_LO16(s) ((u16)((s) & 0xffff))
+ #define WL1271_TX_SECURITY_HI32(s) ((u32)(((s) >> 16) & 0xffffffff))
+diff --git a/drivers/net/wireless/wl12xx/main.c b/drivers/net/wireless/wl12xx/main.c
+--- a/drivers/net/wireless/wl12xx/main.c
++++ b/drivers/net/wireless/wl12xx/main.c
+@@ -1105,9 +1105,15 @@ out:
+ static int wl1271_fetch_nvs(struct wl1271 *wl)
+ {
+ 	const struct firmware *fw;
++	const char *nvs_name;
+ 	int ret;
+ 
+-	ret = request_firmware(&fw, WL12XX_NVS_NAME, wl1271_wl_to_dev(wl));
++	if (wl->chip.id == CHIP_ID_1283_PG20)
++		nvs_name = WL128X_NVS_NAME;
++	else
++		nvs_name	= WL127X_NVS_NAME;
++		
++	ret = request_firmware(&fw, nvs_name, wl1271_wl_to_dev(wl));
+ 
+ 	if (ret < 0) {
+ 		wl1271_error("could not get nvs file: %d", ret);
+@@ -1330,7 +1336,7 @@ static int wl1271_chip_wakeup(struct wl1271 *wl)
+ 			goto out;
+ 		break;
+ 	case CHIP_ID_1271_PG20:
+-		wl1271_debug(DEBUG_BOOT, "chip id 0x%x (1271 PG20)",
++		wl1271_info("chip id 0x%x (1271 PG20)",
+ 			     wl->chip.id);
+ 
+ 		ret = wl1271_setup(wl);
+@@ -1338,7 +1344,7 @@ static int wl1271_chip_wakeup(struct wl1271 *wl)
+ 			goto out;
+ 		break;
+ 	case CHIP_ID_1283_PG20:
+-		wl1271_debug(DEBUG_BOOT, "chip id 0x%x (1283 PG20)",
++		wl1271_info("chip id 0x%x (1283 PG20)",
+ 			     wl->chip.id);
+ 
+ 		ret = wl1271_setup(wl);
