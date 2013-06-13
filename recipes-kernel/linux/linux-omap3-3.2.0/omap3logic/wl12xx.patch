@@ -6,7 +6,7 @@ diff --git a/drivers/net/wireless/wl12xx/wl12xx.h b/drivers/net/wireless/wl12xx/
   * the correct NVS size in wl1271_boot_upload_nvs().
   */
 -#define WL12XX_NVS_NAME "ti-connectivity/wl1271-nvs.bin"
-+#define WL127X_NVS_NAME "ti-connectivity/wl127x-nvs.bin"
++#define WL12XX_NVS_NAME "ti-connectivity/wl127x-nvs.bin"
 +#define WL128X_NVS_NAME "ti-connectivity/wl128x-nvs.bin"
  
  #define WL1271_TX_SECURITY_LO16(s) ((u16)((s) & 0xffff))
@@ -25,7 +25,7 @@ diff --git a/drivers/net/wireless/wl12xx/main.c b/drivers/net/wireless/wl12xx/ma
 +	if (wl->chip.id == CHIP_ID_1283_PG20)
 +		nvs_name = WL128X_NVS_NAME;
 +	else
-+		nvs_name	= WL127X_NVS_NAME;
++		nvs_name = WL12XX_NVS_NAME;
 +		
 +	ret = request_firmware(&fw, nvs_name, wl1271_wl_to_dev(wl));
  
