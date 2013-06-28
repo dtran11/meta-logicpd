@@ -94,7 +94,7 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  
  #define OMAP3LOGIC_SMSC911X_CS			1
  
-@@ -54,6 +74,72 @@
+@@ -54,6 +74,107 @@
  #define OMAP3_TORPEDO_MMC_GPIO_CD		127
  #define OMAP3_TORPEDO_SMSC911X_GPIO_IRQ		129
  
@@ -163,11 +163,46 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +	},
 +};
 +
++#if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)
++#include <linux/leds.h>
++
++static struct gpio_led gpio_leds[] = {
++	{
++		.name			= "COM:D1",	/* D1 on Torpedo module */
++		.default_trigger = "heartbeat",
++		.gpio			= -EINVAL,	/* gets replaced */
++		.active_low		= true,
++	},
++};
++
++static struct gpio_led_platform_data gpio_leds_pdata = {
++	.leds		= gpio_leds,
++	.num_leds	= ARRAY_SIZE(gpio_leds),
++};
++
++static struct platform_device gpio_leds_device = {
++	.name	= "leds-gpio",
++	.id	= -1,
++	.dev	= {
++		.platform_data	= &gpio_leds_pdata,
++	},
++};
++
++static void __init omap3logic_init_led(void)
++{
++	platform_device_register(&gpio_leds_device);
++}
++
++#else
++static inline void __init omap3logic_init_led(void) { return; }
++#endif
++
++
 +// SD Card
  static struct regulator_consumer_supply omap3logic_vmmc1_supply[] = {
  	REGULATOR_SUPPLY("vmmc", "omap_hsmmc.0"),
  };
-@@ -74,137 +160,332 @@ static struct regulator_init_data omap3logic_vmmc1 = {
+@@ -74,137 +195,338 @@ static struct regulator_init_data omap3logic_vmmc1 = {
  	.consumer_supplies      = omap3logic_vmmc1_supply,
  };
  
@@ -332,6 +367,11 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +	
 +	omap2_hsmmc_init(board_mmc_info);
 +	
++#if defined(CONFIG_LEDS_GPIO) || defined(CONFIG_LEDS_GPIO_MODULE)	
++	/* TWL4030_GPIO_MAX + 0 == ledA, PMU_STAT (out, active low LED) */	
++	gpio_leds[0].gpio = gpio + TWL4030_GPIO_MAX + 0;
++#endif
++
 +	return 0;
 +}
 +
@@ -554,6 +594,7 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +	omap_nand_flash_init(0, omap_nand_partitions, ARRAY_SIZE(omap_nand_partitions));	
 +	omap3logic_init_musb();	
 +	omap3logic_init_smsc911x();
++	omap3logic_init_led();
 +	omap3logic_opp_init();
 +	
  	/* Ensure SDRC pins are mux'd for self-refresh */
@@ -576,7 +617,7 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  	.map_io		= omap3_map_io,
  	.init_early	= omap35xx_init_early,
  	.init_irq	= omap3_init_irq,
-@@ -214,6 +495,27 @@ MACHINE_END
+@@ -214,6 +536,27 @@ MACHINE_END
  
  MACHINE_START(OMAP3530_LV_SOM, "OMAP Logic 3530 LV SOM board")
  	.atag_offset	= 0x100,
