@@ -489,3 +489,4 @@ diff --git a/board/logicpd/omap3som/omap3logic.c b/board/logicpd/omap3som/omap3l
 -	MUX_VAL(CP(SDRC_CKE0),		(IDIS | PTU | EN  | M0));
 +	MUX_OMAP3LOGIC();
  }
+
