@@ -270,7 +270,68 @@ diff --git a/board/logicpd/omap3som/omap3logic.h b/board/logicpd/omap3som/omap3l
 diff --git a/board/logicpd/omap3som/omap3logic.c b/board/logicpd/omap3som/omap3logic.c
 --- a/board/logicpd/omap3som/omap3logic.c
 +++ b/board/logicpd/omap3som/omap3logic.c
-@@ -137,6 +137,54 @@ int board_init(void)
+@@ -80,20 +80,12 @@ static struct board_id {
+  */
+ #define BOARD_ID_GPIO	189 /* hsusb0_data5 pin */
+ 
+-/*
+- * Routine: board_init
+- * Description: Early hardware init.
+- */
+-int board_init(void)
++int get_machine_id(char **out_name)
+ {
+ 	struct board_id *board;
+-	unsigned int val;
+-
+-	gpmc_init(); /* in SRAM or SDRAM, finish GPMC */
+-
+-	/* boot param addr */
+-	gd->bd->bi_boot_params = (OMAP34XX_SDRC_CS0 + 0x100);
+-
++	unsigned int val, id;
++	
++		
+ 	/*
+ 	 * To identify between a SOM LV and Torpedo module,
+ 	 * a pulldown resistor is on hsusb0_data5 for the SOM LV module.
+@@ -124,19 +116,87 @@ int board_init(void)
+ 		val = gpio_get_value(BOARD_ID_GPIO);
+ 		gpio_free(BOARD_ID_GPIO);
+ 
+-		board = &boards[!!(get_cpu_family() == CPU_OMAP36XX)][!!val];
+-		printf("Board: %s\n", board->name);
+-
+-		/* Set the machine_id passed to Linux */
+-		gd->bd->bi_arch_number = board->machine_id;
++		board = &boards[!!(get_cpu_family() == CPU_OMAP36XX)][!!val];		
++		id = board->machine_id;
++		
++		if (out_name)
++			*out_name = board->name;
+ 	}
+ 
+ 	/* restore hsusb0_data5 pin as hsusb0_data5 */
+ 	MUX_VAL(CP(HSUSB0_DATA5),	(IEN  | PTD | DIS | M0));
+ 
++	return id;
++}
++
++/*
++ * Routine: board_init
++ * Description: Early hardware init.
++ */
++int board_init(void)
++{
++	/* in SRAM or SDRAM, finish GPMC */
++	gpmc_init();
++
++	/* boot param addr */
++	gd->bd->bi_boot_params = (OMAP34XX_SDRC_CS0 + 0x100);
++
++	/* Set the machine_id passed to Linux */
++	gd->bd->bi_arch_number = get_machine_id(NULL);
++	
  	return 0;
  }
  
@@ -293,39 +354,41 @@ diff --git a/board/logicpd/omap3som/omap3logic.c b/board/logicpd/omap3som/omap3l
 +void get_board_mem_timings(u32 *mcfg, u32 *ctrla, u32 *ctrlb, u32 *rfr_ctrl,
 +		u32 *mr)
 +{
++	char *mach_name = NULL;
++	
 +	*mr = MICRON_V_MR_165;
-+	switch (1) {
-+	case 0: /* Micron 1286MB/256MB, 1/2 banks of 128MB */
-+		*mcfg = MICRON_V_MCFG_165(128 << 20);
-+		*ctrla = MICRON_V_ACTIMA_165;
-+		*ctrlb = MICRON_V_ACTIMB_165;
-+		*rfr_ctrl = SDP_3430_SDRC_RFR_CTRL_165MHz;
-+		break;
-+	case 1: /* Micron 256MB/512MB, 1/2 banks of 256MB */
-+		*mcfg = MICRON_V_MCFG_165(256 << 20);
-+		*ctrla = MICRON_V_ACTIMA_165;
-+		*ctrlb = MICRON_V_ACTIMB_165;
-+		*rfr_ctrl = SDP_3430_SDRC_RFR_CTRL_165MHz;
-+		break;
-+	case 2: /* Hynix 256MB/512MB, 1/2 banks of 256MB */
-+		*mcfg = HYNIX_V_MCFG_165(256 << 20);
-+		*ctrla = HYNIX_V_ACTIMA_165;
-+		*ctrlb = HYNIX_V_ACTIMB_165;
-+		*rfr_ctrl = SDP_3430_SDRC_RFR_CTRL_165MHz;
-+		break;
-+	default:
-+		*mcfg = MICRON_V_MCFG_165(128 << 20);
-+		*ctrla = MICRON_V_ACTIMA_165;
-+		*ctrlb = MICRON_V_ACTIMB_165;
-+		*rfr_ctrl = SDP_3430_SDRC_RFR_CTRL_165MHz;
++	
++	switch (get_machine_id(&mach_name)) {
++		case MACH_TYPE_OMAP3530_LV_SOM:
++		case MACH_TYPE_OMAP3_TORPEDO:			
++			/* Micron 256MB/512MB, 1/2 banks of 256MB, 165MHz */
++			*mcfg = 0x03588019;
++			*ctrla = 0x6ae24707;
++			*ctrlb = 0x00011617;
++			*rfr_ctrl = 0x0003c701;
++			break;
++		case MACH_TYPE_DM3730_SOM_LV:
++		case MACH_TYPE_DM3730_TORPEDO:
++			/* Micron 256MB/512MB, 1/2 banks of 256MB, 200MHz */			
++			*mcfg = 0x03588019;
++			*ctrla = 0x83264707;
++			*ctrlb = 0x00021623;
++			*rfr_ctrl = 0x00049701;
++			break;
++		default:
++			printf("get_board_mem_timings: unknown board id");
++			break;
 +	}
++	
++	if (mach_name)
++		printf(mach_name);
 +}
 +#endif
 +
  #if defined(CONFIG_GENERIC_MMC) && !defined(CONFIG_SPL_BUILD)
  int board_mmc_init(bd_t *bis)
  {
-@@ -164,16 +212,21 @@ int board_eth_init(bd_t *bis)
+@@ -164,16 +224,21 @@ int board_eth_init(bd_t *bis)
  }
  #endif
  
@@ -355,7 +418,7 @@ diff --git a/board/logicpd/omap3som/omap3logic.c b/board/logicpd/omap3som/omap3l
  
  /*
   * Routine: set_muxconf_regs
-@@ -183,69 +236,5 @@ int board_eth_init(bd_t *bis)
+@@ -183,69 +248,5 @@ int board_eth_init(bd_t *bis)
   */
  void set_muxconf_regs(void)
  {
