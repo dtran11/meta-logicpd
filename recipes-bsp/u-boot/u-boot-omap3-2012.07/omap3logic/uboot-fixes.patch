@@ -381,7 +381,7 @@ diff --git a/board/logicpd/omap3som/omap3logic.c b/board/logicpd/omap3som/omap3l
 +	}
 +	
 +	if (mach_name)
-+		printf(mach_name);
++		printf("Board: %s\n", mach_name);
 +}
 +#endif
 +
