@@ -485,7 +485,7 @@ diff --git a/include/configs/omap3_logic.h b/include/configs/omap3_logic.h
 +
 +		#undef CONFIG_BOOTCOMMAND
 +		#define CONFIG_BOOTCOMMAND		\
-+			"nand read 0x82000000 280000 400000; " \
++			"nand read 0x82000000 280000 280000; " \
 +			"bootm 0x82000000;"
 +
 +		#undef CONFIG_BOOTARGS
