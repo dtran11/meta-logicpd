@@ -1,3 +1,46 @@
+diff --git a/arch/arm/mach-omap2/Kconfig b/arch/arm/mach-omap2/Kconfig
+--- a/arch/arm/mach-omap2/Kconfig
++++ b/arch/arm/mach-omap2/Kconfig
+@@ -177,6 +177,26 @@ config MACH_OMAP3_TORPEDO
+ 	 for full description please see the products webpage at
+ 	 http://www.logicpd.com/products/development-kits/zoom-omap35x-torpedo-development-kit
+ 
++config MACH_DM3730_SOM_LV
++	bool "Logic DM373x SOM LV board"
++	depends on ARCH_OMAP3
++	select OMAP_PACKAGE_CBP
++	default y
++	help
++	 Support for the LogicPD DM37x SOM Development kit
++	 for full description please see the products webpage at
++	 http://www.logicpd.com/products/development-kits/dm3730-som-lv-devkit
++
++config MACH_DM3730_TORPEDO
++	bool "Logic DM37x Torpedo board"
++	depends on ARCH_OMAP3
++	select OMAP_PACKAGE_CBP
++	default y
++	help
++	 Support for the LogicPD DM37x Torpedo Development kit
++	 for full description please see the products webpage at
++	 http://www.logicpd.com/products/development-kits/dm3730-torpedo-devkit
++
+ config MACH_OVERO
+ 	bool "Gumstix Overo board"
+ 	depends on ARCH_OMAP3
+
+diff --git a/arch/arm/mach-omap2/Makefile b/arch/arm/mach-omap2/Makefile
+--- a/arch/arm/mach-omap2/Makefile
++++ b/arch/arm/mach-omap2/Makefile
+@@ -194,6 +194,7 @@ obj-$(CONFIG_MACH_DEVKIT8000)     	+= board-devkit8000.o
+ obj-$(CONFIG_MACH_OMAP_LDP)		+= board-ldp.o
+ obj-$(CONFIG_MACH_OMAP3530_LV_SOM)      += board-omap3logic.o
+ obj-$(CONFIG_MACH_OMAP3_TORPEDO)        += board-omap3logic.o
++obj-$(CONFIG_MACH_DM3730_TORPEDO)		+= board-omap3logic.o
+ obj-$(CONFIG_MACH_ENCORE)		+= board-omap3encore.o
+ obj-$(CONFIG_MACH_OVERO)		+= board-overo.o
+ obj-$(CONFIG_MACH_OMAP3EVM)		+= board-omap3evm.o
+
 diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-omap3logic.c
 --- a/arch/arm/mach-omap2/board-omap3logic.c
 +++ b/arch/arm/mach-omap2/board-omap3logic.c
