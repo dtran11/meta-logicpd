@@ -1,3 +1,291 @@
+diff --git a/drivers/rtc/rtc-twl.c b/drivers/rtc/rtc-twl.c
+--- a/drivers/rtc/rtc-twl.c
++++ b/drivers/rtc/rtc-twl.c
+@@ -144,10 +144,18 @@ static const u8 twl6030_rtc_reg_map[] = {
+ #define BIT_RTC_INTERRUPTS_REG_IT_TIMER_M        0x04
+ #define BIT_RTC_INTERRUPTS_REG_IT_ALARM_M        0x08
+ 
++/* RTC_HOUR_REG bitfields */
++#define BIT_RTC_HOUR_REG_PM_NAM                  0x80
+ 
+ /* REG_SECONDS_REG through REG_YEARS_REG is how many registers? */
+ #define ALL_TIME_REGS		6
+ 
++/* Use single-word I2C transactions instead of bulk (something's wonky
++   with mutil-word transactions, the first few words are right but ending
++   words are weird... */
++#define RTC_USE_SINGLE_WORD_RW
++
++
+ /*----------------------------------------------------------------------*/
+ static u8  *rtc_reg_map;
+ 
+@@ -230,6 +238,35 @@ static int twl_rtc_alarm_irq_enable(struct device *dev, unsigned enabled)
+ 	return ret;
+ }
+ 
++static inline int twl_rtc_convert_from_12h(int reg)
++{
++	int hour;
++	
++	hour = bcd2bin(reg & ~BIT_RTC_HOUR_REG_PM_NAM);
++
++	if (reg & BIT_RTC_HOUR_REG_PM_NAM) {
++		if(hour != 12)
++			hour += 12;
++	} else {
++		if(hour == 12)
++			hour = 0;
++	}
++
++	return hour;
++}
++
++static inline int twl_rtc_convert_to_12h(int hour)
++{
++	int am;
++
++	am = (hour < 12) ? 0 : BIT_RTC_HOUR_REG_PM_NAM;
++	hour %= 12;
++	if(hour == 0)
++		hour = 12;
++
++	return bin2bcd(hour) | am;
++}
++
+ /*
+  * Gets current TWL RTC time and date parameters.
+  *
+@@ -255,8 +292,22 @@ static int twl_rtc_read_time(struct device *dev, struct rtc_time *tm)
+ 	if (ret < 0)
+ 		return ret;
+ 
++#ifdef RTC_USE_SINGLE_WORD_RW
++	ret = twl_rtc_read_u8(&rtc_data[0], rtc_reg_map[REG_SECONDS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_read_u8(&rtc_data[1], rtc_reg_map[REG_MINUTES_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_read_u8(&rtc_data[2], rtc_reg_map[REG_HOURS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_read_u8(&rtc_data[3], rtc_reg_map[REG_DAYS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_read_u8(&rtc_data[4], rtc_reg_map[REG_MONTHS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_read_u8(&rtc_data[5], rtc_reg_map[REG_YEARS_REG]);
++#else
+ 	ret = twl_i2c_read(TWL_MODULE_RTC, rtc_data,
+ 			(rtc_reg_map[REG_SECONDS_REG]), ALL_TIME_REGS);
++#endif
+ 
+ 	if (ret < 0) {
+ 		dev_err(dev, "rtc_read_time error %d\n", ret);
+@@ -265,7 +316,11 @@ static int twl_rtc_read_time(struct device *dev, struct rtc_time *tm)
+ 
+ 	tm->tm_sec = bcd2bin(rtc_data[0]);
+ 	tm->tm_min = bcd2bin(rtc_data[1]);
+-	tm->tm_hour = bcd2bin(rtc_data[2]);
++	if (save_control & BIT_RTC_CTRL_REG_MODE_12_24_M) {
++		tm->tm_hour = twl_rtc_convert_from_12h(rtc_data[2]);
++	} else {
++		tm->tm_hour = bcd2bin(rtc_data[2]);
++	}
+ 	tm->tm_mday = bcd2bin(rtc_data[3]);
+ 	tm->tm_mon = bcd2bin(rtc_data[4]) - 1;
+ 	tm->tm_year = bcd2bin(rtc_data[5]) + 100;
+@@ -281,7 +336,6 @@ static int twl_rtc_set_time(struct device *dev, struct rtc_time *tm)
+ 
+ 	rtc_data[1] = bin2bcd(tm->tm_sec);
+ 	rtc_data[2] = bin2bcd(tm->tm_min);
+-	rtc_data[3] = bin2bcd(tm->tm_hour);
+ 	rtc_data[4] = bin2bcd(tm->tm_mday);
+ 	rtc_data[5] = bin2bcd(tm->tm_mon + 1);
+ 	rtc_data[6] = bin2bcd(tm->tm_year - 100);
+@@ -292,13 +346,34 @@ static int twl_rtc_set_time(struct device *dev, struct rtc_time *tm)
+ 		goto out;
+ 
+ 	save_control &= ~BIT_RTC_CTRL_REG_STOP_RTC_M;
+-	ret = twl_rtc_write_u8(save_control, REG_RTC_CTRL_REG);
++
++	twl_rtc_write_u8(save_control, REG_RTC_CTRL_REG);
+ 	if (ret < 0)
+ 		goto out;
+ 
++	/* If the RTC is in 12-hour mode, then adjust for it */
++	if (save_control & BIT_RTC_CTRL_REG_MODE_12_24_M)
++		rtc_data[3] = twl_rtc_convert_to_12h(tm->tm_hour);
++	else
++		rtc_data[3] = bin2bcd(tm->tm_hour);
++
+ 	/* update all the time registers in one shot */
++#ifdef RTC_USE_SINGLE_WORD_RW
++	ret = twl_rtc_write_u8(rtc_data[1], rtc_reg_map[REG_SECONDS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_write_u8(rtc_data[2], rtc_reg_map[REG_MINUTES_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_write_u8(rtc_data[3], rtc_reg_map[REG_HOURS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_write_u8(rtc_data[4], rtc_reg_map[REG_DAYS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_write_u8(rtc_data[5], rtc_reg_map[REG_MONTHS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_write_u8(rtc_data[6], rtc_reg_map[REG_YEARS_REG]);
++#else
+ 	ret = twl_i2c_write(TWL_MODULE_RTC, rtc_data,
+ 		(rtc_reg_map[REG_SECONDS_REG]), ALL_TIME_REGS);
++#endif
+ 	if (ret < 0) {
+ 		dev_err(dev, "rtc_set_time error %d\n", ret);
+ 		goto out;
+@@ -319,9 +394,28 @@ static int twl_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alm)
+ {
+ 	unsigned char rtc_data[ALL_TIME_REGS + 1];
+ 	int ret;
++	u8 save_control;
++
++	ret = twl_rtc_read_u8(&save_control, REG_RTC_CTRL_REG);
++	if (ret < 0)
++		return ret;
+ 
++#ifdef RTC_USE_SINGLE_WORD_RW
++	ret = twl_rtc_read_u8(&rtc_data[0], rtc_reg_map[REG_ALARM_SECONDS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_read_u8(&rtc_data[1], rtc_reg_map[REG_ALARM_MINUTES_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_read_u8(&rtc_data[2], rtc_reg_map[REG_ALARM_HOURS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_read_u8(&rtc_data[3], rtc_reg_map[REG_ALARM_DAYS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_read_u8(&rtc_data[4], rtc_reg_map[REG_ALARM_MONTHS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_read_u8(&rtc_data[5], rtc_reg_map[REG_ALARM_YEARS_REG]);
++#else
+ 	ret = twl_i2c_read(TWL_MODULE_RTC, rtc_data,
+ 			(rtc_reg_map[REG_ALARM_SECONDS_REG]), ALL_TIME_REGS);
++#endif
+ 	if (ret < 0) {
+ 		dev_err(dev, "rtc_read_alarm error %d\n", ret);
+ 		return ret;
+@@ -330,7 +424,11 @@ static int twl_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alm)
+ 	/* some of these fields may be wildcard/"match all" */
+ 	alm->time.tm_sec = bcd2bin(rtc_data[0]);
+ 	alm->time.tm_min = bcd2bin(rtc_data[1]);
+-	alm->time.tm_hour = bcd2bin(rtc_data[2]);
++	if (save_control & BIT_RTC_CTRL_REG_MODE_12_24_M)
++		alm->time.tm_hour = twl_rtc_convert_from_12h(rtc_data[2]);
++	else
++		alm->time.tm_hour = bcd2bin(rtc_data[2]);
++
+ 	alm->time.tm_mday = bcd2bin(rtc_data[3]);
+ 	alm->time.tm_mon = bcd2bin(rtc_data[4]) - 1;
+ 	alm->time.tm_year = bcd2bin(rtc_data[5]) + 100;
+@@ -344,23 +442,47 @@ static int twl_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alm)
+ 
+ static int twl_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alm)
+ {
++	unsigned char save_control;
+ 	unsigned char alarm_data[ALL_TIME_REGS + 1];
+ 	int ret;
+ 
++	ret = twl_rtc_read_u8(&save_control, REG_RTC_CTRL_REG);
++	if (ret < 0)
++		goto out;
++
+ 	ret = twl_rtc_alarm_irq_enable(dev, 0);
+ 	if (ret)
+ 		goto out;
+ 
+ 	alarm_data[1] = bin2bcd(alm->time.tm_sec);
+ 	alarm_data[2] = bin2bcd(alm->time.tm_min);
+-	alarm_data[3] = bin2bcd(alm->time.tm_hour);
++
++	/* If the RTC is in 12-hour mode, then adjust for it */
++	if (save_control & BIT_RTC_CTRL_REG_MODE_12_24_M)
++		alarm_data[3] = twl_rtc_convert_to_12h(alm->time.tm_hour);
++	else
++		alarm_data[3] = bin2bcd(alm->time.tm_hour);
+ 	alarm_data[4] = bin2bcd(alm->time.tm_mday);
+ 	alarm_data[5] = bin2bcd(alm->time.tm_mon + 1);
+ 	alarm_data[6] = bin2bcd(alm->time.tm_year - 100);
+ 
+ 	/* update all the alarm registers in one shot */
++#ifdef RTC_USE_SINGLE_WORD_RW
++	ret = twl_rtc_write_u8(alarm_data[1], rtc_reg_map[REG_ALARM_SECONDS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_write_u8(alarm_data[2], rtc_reg_map[REG_ALARM_MINUTES_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_write_u8(alarm_data[3], rtc_reg_map[REG_ALARM_HOURS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_write_u8(alarm_data[4], rtc_reg_map[REG_ALARM_DAYS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_write_u8(alarm_data[5], rtc_reg_map[REG_ALARM_MONTHS_REG]);
++	if (ret >= 0)
++		ret = twl_rtc_write_u8(alarm_data[6], rtc_reg_map[REG_ALARM_YEARS_REG]);
++#else
+ 	ret = twl_i2c_write(TWL_MODULE_RTC, alarm_data,
+ 		(rtc_reg_map[REG_ALARM_SECONDS_REG]), ALL_TIME_REGS);
++#endif
+ 	if (ret) {
+ 		dev_err(dev, "rtc_set_alarm error %d\n", ret);
+ 		goto out;
+@@ -379,6 +501,14 @@ static irqreturn_t twl_rtc_interrupt(int irq, void *rtc)
+ 	int res;
+ 	u8 rd_reg;
+ 
++#ifdef CONFIG_LOCKDEP
++	/* WORKAROUND for lockdep forcing IRQF_DISABLED on us, which
++	 * we don't want and can't tolerate.  Although it might be
++	 * friendlier not to borrow this thread context...
++	 */
++	local_irq_enable();
++#endif
++
+ 	res = twl_rtc_read_u8(&rd_reg, REG_RTC_STATUS_REG);
+ 	if (res)
+ 		goto out;
+
+diff --git a/arch/arm/mach-omap2/Kconfig b/arch/arm/mach-omap2/Kconfig
+--- a/arch/arm/mach-omap2/Kconfig
++++ b/arch/arm/mach-omap2/Kconfig
+@@ -177,6 +177,26 @@ config MACH_OMAP3_TORPEDO
+ 	 for full description please see the products webpage at
+ 	 http://www.logicpd.com/products/development-kits/zoom-omap35x-torpedo-development-kit
+ 
++config MACH_DM3730_SOM_LV
++	bool "Logic DM373x SOM LV board"
++	depends on ARCH_OMAP3
++	select OMAP_PACKAGE_CBP
++	default y
++	help
++	 Support for the LogicPD DM37x SOM Development kit
++	 for full description please see the products webpage at
++	 http://www.logicpd.com/products/development-kits/dm3730-som-lv-devkit
++
++config MACH_DM3730_TORPEDO
++	bool "Logic DM37x Torpedo board"
++	depends on ARCH_OMAP3
++	select OMAP_PACKAGE_CBP
++	default y
++	help
++	 Support for the LogicPD DM37x Torpedo Development kit
++	 for full description please see the products webpage at
++	 http://www.logicpd.com/products/development-kits/dm3730-torpedo-devkit
++
+ config MACH_OVERO
+ 	bool "Gumstix Overo board"
+ 	depends on ARCH_OMAP3
+
+diff --git a/arch/arm/mach-omap2/Makefile b/arch/arm/mach-omap2/Makefile
+--- a/arch/arm/mach-omap2/Makefile
++++ b/arch/arm/mach-omap2/Makefile
+@@ -194,6 +194,7 @@ obj-$(CONFIG_MACH_DEVKIT8000)     	+= board-devkit8000.o
+ obj-$(CONFIG_MACH_OMAP_LDP)		+= board-ldp.o
+ obj-$(CONFIG_MACH_OMAP3530_LV_SOM)      += board-omap3logic.o
+ obj-$(CONFIG_MACH_OMAP3_TORPEDO)        += board-omap3logic.o
++obj-$(CONFIG_MACH_DM3730_TORPEDO)		+= board-omap3logic.o
+ obj-$(CONFIG_MACH_ENCORE)		+= board-omap3encore.o
+ obj-$(CONFIG_MACH_OVERO)		+= board-overo.o
+ obj-$(CONFIG_MACH_OMAP3EVM)		+= board-omap3evm.o
+
 diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-omap3logic.c
 --- a/arch/arm/mach-omap2/board-omap3logic.c
 +++ b/arch/arm/mach-omap2/board-omap3logic.c
@@ -202,7 +490,7 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  static struct regulator_consumer_supply omap3logic_vmmc1_supply[] = {
  	REGULATOR_SUPPLY("vmmc", "omap_hsmmc.0"),
  };
-@@ -74,137 +195,338 @@ static struct regulator_init_data omap3logic_vmmc1 = {
+@@ -74,19 +195,194 @@ static struct regulator_init_data omap3logic_vmmc1 = {
  	.consumer_supplies      = omap3logic_vmmc1_supply,
  };
  
@@ -397,12 +685,8 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  
  	/* platform_data for children goes here */
  	.gpio		= &omap3logic_gpio_data,
- 	.vmmc1		= &omap3logic_vmmc1,
- };
+@@ -95,116 +391,137 @@ static struct twl4030_platform_data omap3logic_twldata = {
  
-+static struct i2c_board_info __initdata omap3logic_i2c3_boardinfo[] = {
-+};
-+
  static int __init omap3logic_i2c_init(void)
  {
 +	u32 pdata_flags = 0;
@@ -431,11 +715,9 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +	omap3logic_twldata.vpll2->constraints.name = "VDVI";
 +
  	omap3_pmic_init("twl4030", &omap3logic_twldata);
-+
-+	omap_register_i2c_bus(2, 400, NULL, 0);
-+	omap_register_i2c_bus(3, 400, omap3logic_i2c3_boardinfo,
-+			ARRAY_SIZE(omap3logic_i2c3_boardinfo));
-+
++	
++	omap_register_i2c_bus(3, 400, NULL, 0);
++		
  	return 0;
  }
  
@@ -490,8 +772,7 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 -	.gpio_irq       = -EINVAL,
 -	.gpio_reset     = -EINVAL,
 -};
-+		mpu_dev = omap_device_get_by_hwmod_name("mpu");
- 
+-
 -/* TODO/FIXME (comment by Peter Barada, LogicPD):
 - * Fix the PBIAS voltage for Torpedo MMC1 pins that
 - * are used for other needs (IRQs, etc).            */
@@ -499,13 +780,17 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 -{
 -	u16 control_pbias_offset = OMAP343X_CONTROL_PBIAS_LITE;
 -	u32 reg;
-+		if (omap3_has_iva())
-+			iva_dev = omap_device_get_by_hwmod_name("iva");
++		mpu_dev = omap_device_get_by_hwmod_name("mpu");
  
 -	if (machine_is_omap3_torpedo())
 -	{
 -		/* Set the bias for the pin */
 -		reg = omap_ctrl_readl(control_pbias_offset);
++		if (omap3_has_iva())
++			iva_dev = omap_device_get_by_hwmod_name("iva");
+ 
+-		reg &= ~OMAP343X_PBIASLITEPWRDNZ1;
+-		omap_ctrl_writel(reg, control_pbias_offset);
 +		if (!mpu_dev) {
 +			pr_err("%s: Aiee.. no mpu device? %p\n",
 +				__func__, mpu_dev);
@@ -515,17 +800,14 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
 +		r = opp_enable(mpu_dev, 800000000);
 +		r |= opp_enable(mpu_dev, 1000000000);
  
--		reg &= ~OMAP343X_PBIASLITEPWRDNZ1;
--		omap_ctrl_writel(reg, control_pbias_offset);
+-		/* 100ms delay required for PBIAS configuration */
+-		msleep(100);
 +		if (omap3_has_iva()) {
 +			/* Enable IVA 800MHz and lower opps */
 +			r |= opp_enable(iva_dev, 660000000);
 +			r |= opp_enable(iva_dev, 800000000);
 +		}
  
--		/* 100ms delay required for PBIAS configuration */
--		msleep(100);
--
 -		reg |= OMAP343X_PBIASLITEVMODE1;
 -		reg |= OMAP343X_PBIASLITEPWRDNZ1;
 -		omap_ctrl_writel(reg | 0x300, control_pbias_offset);
@@ -617,7 +899,7 @@ diff --git a/arch/arm/mach-omap2/board-omap3logic.c b/arch/arm/mach-omap2/board-
  	.map_io		= omap3_map_io,
  	.init_early	= omap35xx_init_early,
  	.init_irq	= omap3_init_irq,
-@@ -214,6 +536,27 @@ MACHINE_END
+@@ -214,6 +531,27 @@ MACHINE_END
  
  MACHINE_START(OMAP3530_LV_SOM, "OMAP Logic 3530 LV SOM board")
  	.atag_offset	= 0x100,
